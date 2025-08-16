@@ -1,0 +1,56 @@
+#!/usr/bin/env ruby
+# Script to test Ollama integration with Maybe app
+
+require "bundler/setup"
+require_relative "../config/environment"
+
+puts "Testing Ollama integration..."
+
+# Test if Ollama provider can be created
+begin
+  provider = Provider::Registry.get_provider(:ollama)
+  puts "✓ Ollama provider created successfully"
+rescue => e
+  puts "✗ Failed to create Ollama provider: #{e.message}"
+  exit 1
+end
+
+# Test model support
+model_name = ENV.fetch("OLLAMA_MODEL", "llama3.2")
+if provider.supports_model?(model_name.split(':').first) # Remove version tag for support check
+  puts "✓ #{model_name} model is supported"
+else
+  puts "✗ #{model_name} model not supported"
+end
+
+# Test basic completion (will fail if Ollama is not running)
+puts "\nTesting basic completion..."
+begin
+  response = provider.generate_completion("Hello! Please respond with exactly: 'Hi there!'", model: model_name)
+  puts "✓ Basic completion successful"
+  puts "Response: #{response.slice(0, 100)}..."
+rescue => e
+  puts "✗ Basic completion failed: #{e.message}"
+  puts "  Make sure Ollama is running and #{model_name} model is available"
+end
+
+# Test auto-categorization format (without actually calling Ollama)
+puts "\nTesting auto-categorization structure..."
+begin
+  categorizer = Provider::Ollama::AutoCategorizer.new(
+    provider,
+    transactions: [{ id: "test", name: "Test Transaction", amount: 10 }],
+    user_categories: [{ id: "1", name: "Test Category" }]
+  )
+  puts "✓ Auto-categorizer created successfully"
+rescue => e
+  puts "✗ Auto-categorizer creation failed: #{e.message}"
+end
+
+puts "\nOllama integration test complete!"
+puts "\nTo use Ollama features:"
+puts "1. Make sure Ollama is installed and running"
+puts "2. Download a model: ollama pull #{model_name}"
+puts "3. Set environment variables in .env.local:"
+puts "   OLLAMA_URL=http://localhost:11434/v1"
+puts "   OLLAMA_MODEL=#{model_name}"

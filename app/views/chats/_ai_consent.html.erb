@@ -9,8 +9,7 @@
     <% if Current.user.ai_available? %>
       Maybe AI can answer financial questions and provide insights based on your data. To use this feature you'll need to explicitly enable it.
     <% else %>
-      To use the AI assistant, you need to set the <code class="bg-surface-inset px-1 py-0.5 rounded font-mono text-xs">OPENAI_ACCESS_TOKEN</code>
-      environment variable in your self-hosted instance.
+      To use the AI assistant, you need to set up Ollama in your self-hosted instance. Set the <code class="bg-surface-inset px-1 py-0.5 rounded font-mono text-xs">OLLAMA_URL</code> and <code class="bg-surface-inset px-1 py-0.5 rounded font-mono text-xs">OLLAMA_MODEL</code> environment variables, or ensure Ollama is running on <code class="bg-surface-inset px-1 py-0.5 rounded font-mono text-xs">localhost:11434</code>.
     <% end %>
   </p>
 
@@ -22,5 +21,5 @@
     <% end %>
   <% end %>
 
-  <p class="text-xs text-secondary text-center mt-2">Disable anytime.  All data sent to our LLM providers is anonymized.</p>
+  <p class="text-xs text-secondary text-center mt-2">Disable anytime. All data is processed locally through your Ollama instance.</p>
 </div>
