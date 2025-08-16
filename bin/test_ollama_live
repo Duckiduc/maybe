@@ -1,0 +1,100 @@
+#!/usr/bin/env ruby
+# Live test of Ollama auto-categorization with real responses
+
+require "bundler/setup"
+require_relative "../config/environment"
+
+puts "Testing live Ollama auto-categorization..."
+
+# Set up test data
+test_transactions = [
+  { id: "1", name: "McDonald's Restaurant", amount: 12.50, classification: "expense" },
+  { id: "2", name: "Grocery Store Purchase", amount: 45.23, classification: "expense" },
+  { id: "3", name: "Monthly Salary", amount: 3000.00, classification: "income" }
+]
+
+test_categories = [
+  { id: "1", name: "Food & Dining", classification: "expense" },
+  { id: "2", name: "Groceries", classification: "expense" },
+  { id: "3", name: "Salary", classification: "income" },
+  { id: "4", name: "Entertainment", classification: "expense" }
+]
+
+# Get Ollama provider
+begin
+  provider = Provider::Registry.get_provider(:ollama)
+  puts "✓ Ollama provider initialized"
+rescue => e
+  puts "✗ Failed to get Ollama provider: #{e.message}"
+  exit 1
+end
+
+# Test auto-categorization
+puts "\n" + "="*60
+puts "Testing Auto-Categorization"
+puts "="*60
+
+begin
+  result = provider.auto_categorize(
+    transactions: test_transactions,
+    user_categories: test_categories
+  )
+
+  if result.success?
+    puts "✓ Auto-categorization successful!"
+    puts "\nResults:"
+    result.data.each do |categorization|
+      transaction = test_transactions.find { |t| t[:id] == categorization.transaction_id }
+      puts "  Transaction: #{transaction[:name]}"
+      puts "  Category: #{categorization.category_name || 'No category assigned'}"
+      puts "  ---"
+    end
+  else
+    puts "✗ Auto-categorization failed"
+    puts "Error: #{result.error.message}" if result.error
+  end
+rescue => e
+  puts "✗ Auto-categorization failed with exception: #{e.message}"
+  puts "Backtrace:"
+  puts e.backtrace.first(5).map { |line| "  #{line}" }
+end
+
+# Test merchant detection
+puts "\n" + "="*60
+puts "Testing Merchant Detection" 
+puts "="*60
+
+test_merchant_transactions = [
+  { id: "1", name: "AMAZON.COM PURCHASE", amount: 29.99, classification: "expense" },
+  { id: "2", name: "STARBUCKS STORE #1234", amount: 5.75, classification: "expense" },
+  { id: "3", name: "Local Coffee Shop", amount: 4.50, classification: "expense" }
+]
+
+begin
+  result = provider.auto_detect_merchants(
+    transactions: test_merchant_transactions,
+    user_merchants: []
+  )
+
+  if result.success?
+    puts "✓ Merchant detection successful!"
+    puts "\nResults:"
+    result.data.each do |merchant|
+      transaction = test_merchant_transactions.find { |t| t[:id] == merchant.transaction_id }
+      puts "  Transaction: #{transaction[:name]}"
+      puts "  Business: #{merchant.business_name || 'Not detected'}"
+      puts "  URL: #{merchant.business_url || 'Not detected'}"
+      puts "  ---"
+    end
+  else
+    puts "✗ Merchant detection failed"
+    puts "Error: #{result.error.message}" if result.error
+  end
+rescue => e
+  puts "✗ Merchant detection failed with exception: #{e.message}"
+  puts "Backtrace:"
+  puts e.backtrace.first(5).map { |line| "  #{line}" }
+end
+
+puts "\n" + "="*60
+puts "Live test complete!"
