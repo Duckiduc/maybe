@@ -41,8 +41,10 @@ x-rails-env: &rails_env
   DB_HOST: db
   DB_PORT: 5432
   REDIS_URL: redis://redis:6379/1
-# NOTE: enabling OpenAI will incur costs when you use AI-related features in the app (chat, rules).  Make sure you have set appropriate spend limits on your account before adding this.
-  OPENAI_ACCESS_TOKEN: ${OPENAI_ACCESS_TOKEN}
+# NOTE: enabling Ollama will allow you to use AI-related features in the app (chat, rules) with local LLMs.  
+# Make sure you have Ollama running at the specified URL with your desired models downloaded.
+  OLLAMA_URL: ${OLLAMA_URL:-http://localhost:11434/v1}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
 
 services:
   web:
