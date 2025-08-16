@@ -1,3 +1,5 @@
+require "net/http"
+
 class User < ApplicationRecord
   has_secure_password
 
@@ -87,7 +89,7 @@ class User < ApplicationRecord
   end
 
   def ai_available?
-    !Rails.application.config.app_mode.self_hosted? || ENV["OPENAI_ACCESS_TOKEN"].present?
+    !Rails.application.config.app_mode.self_hosted? || ollama_configured?
   end
 
   def ai_enabled?
@@ -164,6 +166,29 @@ class User < ApplicationRecord
   end
 
   private
+    def ollama_configured?
+      # Ollama is considered configured if we can reach the endpoint
+      # or if the environment variables are set (for non-self-hosted instances)
+      return true unless Rails.application.config.app_mode.self_hosted?
+
+      # For self-hosted, check if Ollama URL is accessible or if env vars are set
+      ollama_url = ENV.fetch("OLLAMA_URL", "http://localhost:11434")
+      ENV["OLLAMA_URL"].present? || ENV["OLLAMA_MODEL"].present? || ollama_reachable?(ollama_url)
+    end
+
+    def ollama_reachable?(url)
+      # Basic check to see if Ollama is running
+      uri = URI.parse(url)
+      begin
+        Net::HTTP.start(uri.host, uri.port, read_timeout: 2, open_timeout: 2) do |http|
+          response = http.get("/")
+          response.code.to_i < 500
+        end
+      rescue StandardError
+        false
+      end
+    end
+
     def ensure_valid_profile_image
       return unless profile_image.attached?
 
