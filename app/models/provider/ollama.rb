@@ -5,14 +5,17 @@ class Provider::Ollama < Provider
   Error = Class.new(Provider::Error)
 
   # Popular Ollama models - you can customize this list based on your needs
-  MODELS = %w[llama3.2 llama3.1 llama3 llama2 mistral gemma2 codellama qwen2.5 phi3 deepseek-coder yi neural-chat].freeze
+  MODELS = %w[llama3.2 llama3.1 llama3 llama2 mistral gemma2 codellama qwen2.5 phi3 phi3.5 deepseek-coder yi neural-chat].freeze
 
   # Model aliases for backward compatibility
   MODEL_ALIASES = {
-    "gpt-4.1" => "llama3.2",  # Map OpenAI model to Ollama equivalent
-    "gpt-4" => "llama3.2",
-    "gpt-3.5-turbo" => "llama3.2"
+    "gpt-4.1" => "qwen2.5:7b",  # Map OpenAI model to best Ollama equivalent with function calling
+    "gpt-4" => "qwen2.5:7b",
+    "gpt-3.5-turbo" => "llama3.2:3b"
   }.freeze
+
+  # Models that support better function calling
+  FUNCTION_CALLING_MODELS = %w[qwen2.5 phi3.5 llama3.1 llama3.2].freeze
 
   def initialize(base_url: nil, model: nil)
     @base_url = base_url || "http://localhost:11434/v1"
@@ -86,31 +89,56 @@ class Provider::Ollama < Provider
         response = chat.ask(full_prompt) do |chunk|
           if chunk.respond_to?(:content) && chunk.content.present?
             collected_content += chunk.content
-            parsed_chunk = ChatStreamParser.new(chunk).parsed
-            streamer.call(parsed_chunk) if parsed_chunk
+
+            # Create a proper streaming chunk for the callback
+            parsed_chunk = Provider::LlmConcept::ChatStreamChunk.new(
+              type: "output_text",
+              data: chunk.content
+            )
+            streamer.call(parsed_chunk)
           end
         end
 
-        # Return the complete response for streaming
-        ChatResponse.new(
-          id: SecureRandom.uuid,
-          model: model_to_use,
-          messages: [ ChatMessage.new(id: SecureRandom.uuid, output_text: collected_content) ],
-          function_requests: []
-        )
+        # Return the complete response for streaming - parse for function calls
+        parsed_response = ChatParser.new(collected_content).parsed
+
+        # Emit final response chunk for function execution
+        if parsed_response.function_requests.any? && streamer.present?
+          response_chunk = Provider::LlmConcept::ChatStreamChunk.new(
+            type: "response",
+            data: parsed_response
+          )
+          streamer.call(response_chunk)
+        end
+
+        parsed_response
       else
         # Handle non-streaming
         response = chat.ask(full_prompt)
 
-        parsed_response = ChatParser.new(response).parsed
+        # Extract content from the response
+        content = response.respond_to?(:content) ? response.content : response.to_s
+
+        # Parse the response for function calls
+        parsed_response = ChatParser.new(content).parsed
+
+        # If no function calls were detected, create a simple message response
+        if parsed_response.function_requests.empty?
+          parsed_response = ChatResponse.new(
+            id: SecureRandom.uuid,
+            model: model_to_use,
+            messages: [ ChatMessage.new(id: SecureRandom.uuid, output_text: content) ],
+            function_requests: []
+          )
+        end
 
         # Emit events for non-streaming responses to match expected interface
         if streamer.present?
           # First emit the text content
-          if parsed_response.messages.any? && parsed_response.messages.first.output_text.present?
+          if content.present?
             output_text_chunk = Provider::LlmConcept::ChatStreamChunk.new(
               type: "output_text",
-              data: parsed_response.messages.first.output_text
+              data: content
             )
             streamer.call(output_text_chunk)
           end
@@ -133,7 +161,7 @@ class Provider::Ollama < Provider
     model_to_use = resolve_model(model || @default_model)
     chat = RubyLLM.chat(model: model_to_use, provider: :ollama)
     response = chat.ask(prompt)
-    response.content || response.to_s
+    response.respond_to?(:content) ? response.content : response.to_s
   end
 
   private
